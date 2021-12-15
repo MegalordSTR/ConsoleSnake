@@ -10,12 +10,15 @@
 
 #include "Main.h"
 
+#define MAP_WIDTH 80
+#define MAP_HEIGHT 30
+#define START_FOOD 10
+
+const COORD g_MapSize = { MAP_WIDTH, MAP_HEIGHT };
+
 int main()
 {
-	HANDLE outputHandler = GetStdHandle(STD_OUTPUT_HANDLE);
-	COORD c = { 40, 40 };
-	ConsoleForm* f = NewConsoleForm(c, NULL, TEXT("SNAKE"));
-	sleep(10000);
+	ConsoleForm* f = NewConsoleForm(g_MapSize, NULL, TEXT("SNAKE"));
 	return 0;
 }
 
@@ -32,7 +35,7 @@ ConsoleForm* NewConsoleForm(COORD Size, const char * LocaleName, const TCHAR * T
 		return NULL;
 	}
 
-	ConsoleForm * Console = (ConsoleForm*)HeapAlloc(NULL, 0, sizeof(ConsoleForm));
+	ConsoleForm * Console = (ConsoleForm*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(ConsoleForm));
 	if (Console == NULL) {
 		_tprintf(TEXT("Ошибка выделения памяти под консоль\n"));
 		return NULL;
@@ -80,7 +83,7 @@ BOOL SetConsoleSize(ConsoleForm* Console, COORD NewBufferSize)
 		return FALSE;
 	}
 
-	PCHAR_INFO newBuffer = (PCHAR_INFO)calloc(sizeof (CHAR_INFO), NewBufferSize.X * NewBufferSize.Y);
+	PCHAR_INFO newBuffer = (PCHAR_INFO)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(CHAR_INFO)*NewBufferSize.X * NewBufferSize.Y);
 	if (!newBuffer)
 	{
 		_tprintf(TEXT("Ошибка выделения памяти под буффер %d\n"), GetLastError());
@@ -110,4 +113,63 @@ BOOL SetConsoleTitleAndCursor(ConsoleForm* Console, TCHAR const* Title)
 	}
 
 	return TRUE;
+}
+
+void RefreshConsole(ConsoleForm* Console, SNAKE_MAP SnakeMap)
+{
+	CELL_TYPE PrevCellType = EMPTY;
+	WORD CurrentAttribute = 0;
+
+	for (int i = 0; i < SnakeMap.height * SnakeMap.width; i++)
+	{
+		CELL_TYPE CurrentCellType = SnakeMap.cells[i].cellType;
+
+		if (CurrentCellType != PrevCellType)
+		{
+			PrevCellType = CurrentCellType;
+			if (CurrentCellType == EMPTY)
+			{
+				CurrentAttribute = 0;
+			}
+			else if (CurrentCellType == WALL)
+			{
+				CurrentAttribute = BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE | BACKGROUND_INTENSITY;
+			}
+			else if (CurrentCellType == SNAKE_BODY)
+			{
+				CurrentAttribute = BACKGROUND_GREEN;
+			}
+			else if (CurrentCellType == FOOD)
+			{
+				CurrentAttribute = BACKGROUND_RED | BACKGROUND_GREEN;
+			}
+			else if (CurrentCellType == END)
+			{
+				CurrentAttribute = BACKGROUND_RED | BACKGROUND_INTENSITY;
+			}
+		}
+
+		Console->Buffer[i] = (CHAR_INFO)
+		{
+			.Attributes = CurrentAttribute,
+			.Char.UnicodeChar = TEXT(' ')
+		};
+	}
+
+	SMALL_RECT srctWriteRect = {
+			0,
+			0,
+			Console->BufferSize.X - 1,
+			Console->BufferSize.Y - 1
+	};
+
+	if (!WriteConsoleOutput(Console->OutputHandler, Console->Buffer, Console->BufferSize, (COORD){ 0,0 }, &srctWriteRect)) {
+		_tprintf(TEXT("Ошибка %d записи в консоль\n"), GetLastError());
+		return;
+	}
+}
+
+BOOL MapCoordEqual(MAPCOORD coord1, MAPCOORD coord2)
+{
+	return coord1.x == coord2.x && coord1.y == coord2.y;
 }
