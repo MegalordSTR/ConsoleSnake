@@ -8,58 +8,80 @@ typedef struct ConsoleForm
 	COORD BufferSize;
 } ConsoleForm;
 
-typedef enum MOVE_STATE
-{
-	STILL_ALIVE,
-	BAD_EATEN,
-} MOVE_STATE;
+typedef struct GameStats;
 
-typedef enum CELL_TYPE
+
+typedef enum MoveState
+{
+	NORMAL,
+	FOOD_EATEN,
+	BAD_EATEN,
+} MoveState;
+
+typedef enum CellType
 {
 	EMPTY,
 	SNAKE_BODY,
 	FOOD,
 	WALL,
 	END,
-} CELL_TYPE;
+} CellType;
 
-typedef struct MAPCELL {
-	CELL_TYPE CellType;
-} MAPCELL;
+typedef struct MapCell {
+	CellType CellType;
+} MapCell;
 
-typedef struct MAPCOORD {
+typedef struct MapCOORD {
 	int32_t X;
 	int32_t Y;
-} MAPCOORD;
+} MapCOORD;
 
-BOOL MapCoordEqual(MAPCOORD Coord1, MAPCOORD Coord2);
+const MapCOORD UP = { 0, -1 };
+const MapCOORD DOWN = { 0, 1 };
+const MapCOORD LEFT = { -1, 0 };
+const MapCOORD RIGHT = { 1, 0 };
 
-const MAPCOORD UP = { 0, -1 };
-const MAPCOORD DOWN = { 0, 1 };
-const MAPCOORD LEFT = { -1, 0 };
-const MAPCOORD RIGHT = { 1, 0 };
+typedef struct Snake {
+	MapCOORD Coords;
+	struct Snake* Prev;
+} Snake;
 
-typedef struct SNAKE {
-	MAPCOORD Coords;
-	struct SNAKE* Prev;
-} SNAKE;
-
-typedef struct SNAKE_MAP {
-	SNAKE* SnakeHead;
-	SNAKE* SnakeTail;
-	MAPCELL* Cells;
+typedef struct SnakeMap {
+	Snake* SnakeHead;
+	Snake* SnakeTail;
+	MapCell* Cells;
 	int32_t Height;
 	int32_t Width;
 	int32_t SnakeLen;
-} SNAKE_MAP;
+	int32_t CurrentFoodCount;
+} SnakeMap;
+
+typedef struct Frame {
+	PCHAR_INFO FrameBuffer;
+	SMALL_RECT FramePosition;
+	COORD FrameSize;
+} Frame;
+
+typedef struct GameGUI {
+	ConsoleForm* Console;
+	Frame* MapFrame;
+	Frame* StatsFrame;
+} GameGUI;
+
+void GameMain();
+void UpdateMap(GameGUI GUI, SnakeMap SnakeMap);
+BOOL MapCoordEqual(MapCOORD Coord1, MapCOORD Coord2);
+MoveState MoveSnakeBody(SnakeMap* Map, MapCOORD MoveDirection);
+int32_t GetCellByCoordOnFrame(MapCOORD Coords, COORD FrameSize);
+void SpawnFood(SnakeMap* map);
+void InitMap(SnakeMap* map);
+void SpawnWalls(SnakeMap* Map);
 
 ConsoleForm* NewConsoleForm(COORD Size, const char* LocaleName, const TCHAR* Title);
 BOOL SetConsoleSize(ConsoleForm* Console, COORD NewBufferSize);
 BOOL SetConsoleTitleAndCursor(ConsoleForm* Console, TCHAR const* Title);
-void RefreshConsole(ConsoleForm* Console, SNAKE_MAP SnakeMap);
-void SpawnFood(SNAKE_MAP* map);
-void SpawnWalls(SNAKE_MAP* Map);
-int32_t GetCellByCoord(MAPCOORD Coords);
-MOVE_STATE MoveSnakeBody(SNAKE_MAP* Map, MAPCOORD MoveDirection);
-void GameMain();
-void InitMap(SNAKE_MAP* map);
+
+Frame* MakeFrame(COORD ParentBufferSize, SMALL_RECT FrameRectPosition);
+void DrawGUI(GameGUI GUI);
+void CopyFrameToConsoleBuffer(Frame* Frame, ConsoleForm* Console);
+void MakeFrameBorder(Frame* Frame, ConsoleForm* Console);
