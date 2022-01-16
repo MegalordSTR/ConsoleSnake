@@ -8,7 +8,12 @@ typedef struct ConsoleForm
 	COORD BufferSize;
 } ConsoleForm;
 
-typedef struct GameStats;
+typedef struct GameStats
+{
+	int32_t FoodEaten;
+	int32_t CurrentTurn;
+	int32_t CurrentSpeed;
+} GameStats;
 
 
 typedef enum MoveState
@@ -70,6 +75,7 @@ typedef struct GameGUI {
 
 void GameMain();
 void UpdateMap(GameGUI GUI, SnakeMap SnakeMap);
+void UpdateStats(GameGUI GUI, GameStats Stats);
 BOOL MapCoordEqual(MapCOORD Coord1, MapCOORD Coord2);
 MoveState MoveSnakeBody(SnakeMap* Map, MapCOORD MoveDirection);
 int32_t GetCellByCoordOnFrame(MapCOORD Coords, COORD FrameSize);
@@ -85,3 +91,5 @@ Frame* MakeFrame(COORD ParentBufferSize, SMALL_RECT FrameRectPosition);
 void DrawGUI(GameGUI GUI);
 void CopyFrameToConsoleBuffer(Frame* Frame, ConsoleForm* Console);
 void MakeFrameBorder(Frame* Frame, ConsoleForm* Console);
+
+void PrintStringToFrame(Frame* Frame, const TCHAR* str, int32_t YLevel);

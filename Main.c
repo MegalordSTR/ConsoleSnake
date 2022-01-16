@@ -1,4 +1,4 @@
-#include <stdio.h>
+п»ї#include <stdio.h>
 #include <conio.h>
 #include <stdint.h>
 
@@ -14,8 +14,8 @@
 
 #include "Main.h"
 
-#define MAP_WIDTH 100
-#define MAP_HEIGHT 50
+#define MAP_WIDTH 85
+#define MAP_HEIGHT 40
 
 //#define STAT_WIDTH 20
 //#define STAT_HEIGHT 40
@@ -39,13 +39,13 @@ void GameMain()
 {
 	ConsoleForm* Console = NewConsoleForm(g_MapSize, "Russian", TEXT("S_N_A_K_E"));
 	if (Console == NULL) {
-		_tprintf(TEXT("Ошибка создания консоли!\n"));
+		_tprintf(TEXT("РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РєРѕРЅСЃРѕР»Рё!\n"));
 		return;
 	}
 
 	CONSOLE_SCREEN_BUFFER_INFO ConsoleInfo;
 	if (!GetConsoleScreenBufferInfo(Console->OutputHandler, &ConsoleInfo)) {
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return;
 	}
 
@@ -56,7 +56,7 @@ void GameMain()
 		(SMALL_RECT) {
 			.Left = 0,
 			.Top = 0,
-			.Right = GUI.Console->BufferSize.X - 20,
+			.Right = GUI.Console->BufferSize.X - 25,
 			.Bottom = GUI.Console->BufferSize.Y,
 	});
 	GUI.StatsFrame = MakeFrame(GUI.Console->BufferSize,
@@ -66,6 +66,10 @@ void GameMain()
 			.Right = GUI.Console->BufferSize.X - 1,
 			.Bottom = GUI.Console->BufferSize.Y - 1,
 	});
+
+	GameStats Stats = {
+		.FoodEaten = 0,
+	};
 
 
 	MapCell* CellBuffer = (MapCell*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(MapCell) * GUI.MapFrame->FrameSize.X * GUI.MapFrame->FrameSize.Y);
@@ -86,14 +90,26 @@ void GameMain()
 
 	InitMap(&Map);
 	UpdateMap(GUI, Map);
-	//UpdateStats(GUI, Stats)
 	DrawGUI(GUI);
 
 	BOOL Running = TRUE;
 	MapCOORD CurrentMoveDirection = UP;
 
+	time_t LastTime = 0;
+	time_t CurrentTime = timeGetTime();
+	int32_t AddedSleepDuration = 2 * Map.SnakeLen > 100 ? 0 : 100 - 2 * Map.SnakeLen;
+	Stats.CurrentSpeed = 40 + AddedSleepDuration;
 	while (Running)
 	{
+		LastTime = CurrentTime;
+		CurrentTime = timeGetTime();
+		while (CurrentTime - LastTime < Stats.CurrentSpeed)
+		{
+			int32_t toSleep = (int32_t)Stats.CurrentSpeed - (int32_t)(CurrentTime - LastTime);
+			Sleep(toSleep);
+			CurrentTime = timeGetTime();
+		}
+
 		int State = 0;
 		int KeyboardWasHit = _kbhit();
 		if (KeyboardWasHit) {
@@ -122,7 +138,7 @@ void GameMain()
 			}
 		}
 
-		// TODO: добавить проверку на действие движения, чтобы можно было выполнять служебные команды вне хода()
+		// TODO: РґРѕР±Р°РІРёС‚СЊ РїСЂРѕРІРµСЂРєСѓ РЅР° РґРµР№СЃС‚РІРёРµ РґРІРёР¶РµРЅРёСЏ, С‡С‚РѕР±С‹ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ РІС‹РїРѕР»РЅСЏС‚СЊ СЃР»СѓР¶РµР±РЅС‹Рµ РєРѕРјР°РЅРґС‹ РІРЅРµ С…РѕРґР°()
 		State = MoveSnakeBody(&Map, CurrentMoveDirection);
 
 		if (State == BAD_EATEN)
@@ -144,18 +160,21 @@ void GameMain()
 		if (State == FOOD_EATEN)
 		{
 			Map.CurrentFoodCount--;
-
+			Stats.FoodEaten++;
 			if (Map.CurrentFoodCount < MAX_FOOD)
 			{
 				SpawnFood(&Map);
 			}
 		}
 
+		Stats.CurrentTurn++;
+
+		AddedSleepDuration = 2 * Map.SnakeLen > 100 ? 0 : 100 - 2 * Map.SnakeLen;
+		Stats.CurrentSpeed = 40 + AddedSleepDuration;
 
 		UpdateMap(GUI, Map);
+		UpdateStats(GUI, Stats);
 		DrawGUI(GUI);
-		int AddedSleepDuration = 2 * Map.SnakeLen > 100 ? 0 : 100 - 2 * Map.SnakeLen;
-		Sleep(40 + AddedSleepDuration);
 	}
 
 	return;
@@ -169,7 +188,7 @@ void UpdateMap(GameGUI GUI, SnakeMap SnakeMap)
 	for (int i = 0; i < SnakeMap.Height * SnakeMap.Width; i++)
 	{
 		CellType CurrentCellType = SnakeMap.Cells[i].CellType;
-
+		
 		if (CurrentCellType != PrevCellType)
 		{
 			PrevCellType = CurrentCellType;
@@ -203,10 +222,46 @@ void UpdateMap(GameGUI GUI, SnakeMap SnakeMap)
 	}
 }
 
+void UpdateStats(GameGUI GUI, GameStats Stats)
+{
+	memset(GUI.StatsFrame->FrameBuffer, 0, sizeof(CHAR_INFO) * GUI.StatsFrame->FrameSize.X * GUI.StatsFrame->FrameSize.Y);
+
+	wchar_t Buffer[100] = {0};
+
+	// Current Turn
+	_stprintf_s(Buffer, 100, TEXT("Turn       = %d"), Stats.CurrentTurn);
+	PrintStringToFrame(GUI.StatsFrame, Buffer, GUI.StatsFrame->FrameSize.Y / 2);
+
+	// Food Eaten
+	_stprintf_s(Buffer, 100, TEXT("Food Eaten = %d"), Stats.FoodEaten);
+	PrintStringToFrame(GUI.StatsFrame, Buffer, GUI.StatsFrame->FrameSize.Y / 2 + 1);
+
+	// Speed
+	_stprintf_s(Buffer, 100, TEXT("Speed = %dms"), Stats.CurrentSpeed);
+	PrintStringToFrame(GUI.StatsFrame, Buffer, GUI.StatsFrame->FrameSize.Y / 2 + 5);
+}
+
+void PrintStringToFrame(Frame* Frame, const TCHAR* str, int32_t YLevel)
+{
+	int32_t startPos = GetCellByCoordOnFrame(
+		(MapCOORD) {
+		.X = 0,
+		.Y = YLevel,
+	}, Frame->FrameSize);
+
+	for (int32_t i = 0; str[i] != '\0' && i < Frame->FrameSize.X; i++)
+	{
+		Frame->FrameBuffer[startPos + i] = (CHAR_INFO){
+			.Attributes = FOREGROUND_INTENSITY,
+			.Char.UnicodeChar = str[i]
+		};
+	}
+}
+
 /// <summary>
-/// Принимает Размер родительского буффера, координаты прямоугольника фрейма в SMALL_RECT, возвращает структуру фрейма
+/// РџСЂРёРЅРёРјР°РµС‚ Р Р°Р·РјРµСЂ СЂРѕРґРёС‚РµР»СЊСЃРєРѕРіРѕ Р±СѓС„С„РµСЂР°, РєРѕРѕСЂРґРёРЅР°С‚С‹ РїСЂСЏРјРѕСѓРіРѕР»СЊРЅРёРєР° С„СЂРµР№РјР° РІ SMALL_RECT, РІРѕР·РІСЂР°С‰Р°РµС‚ СЃС‚СЂСѓРєС‚СѓСЂСѓ С„СЂРµР№РјР°
 /// </summary>
-/// <returns>SMALL_RECT реальной позицией фрейма</returns>
+/// <returns>SMALL_RECT СЂРµР°Р»СЊРЅРѕР№ РїРѕР·РёС†РёРµР№ С„СЂРµР№РјР°</returns>
 Frame* MakeFrame(COORD ParentBufferSize, SMALL_RECT FrameRectPosition)
 {
 	Frame* NewFrame = (Frame*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(Frame));
@@ -238,7 +293,7 @@ Frame* MakeFrame(COORD ParentBufferSize, SMALL_RECT FrameRectPosition)
 }
 
 /// <summary>
-/// Отрисовывает содержимое фреймов на консоль
+/// РћС‚СЂРёСЃРѕРІС‹РІР°РµС‚ СЃРѕРґРµСЂР¶РёРјРѕРµ С„СЂРµР№РјРѕРІ РЅР° РєРѕРЅСЃРѕР»СЊ
 /// </summary>
 /// <param name="GUI"></param>
 void DrawGUI(GameGUI GUI)
@@ -257,13 +312,13 @@ void DrawGUI(GameGUI GUI)
 
 
 	if (!WriteConsoleOutput(GUI.Console->OutputHandler, GUI.Console->Buffer, GUI.Console->BufferSize, (COORD) { 0, 0 }, &ConsoleWriteRect)) {
-		_tprintf(TEXT("Ошибка %d записи в консоль\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d Р·Р°РїРёСЃРё РІ РєРѕРЅСЃРѕР»СЊ\n"), GetLastError());
 		return;
 	}
 }
 
 /// <summary>
-/// Копирует буфер фрейма в буфер консоли
+/// РљРѕРїРёСЂСѓРµС‚ Р±СѓС„РµСЂ С„СЂРµР№РјР° РІ Р±СѓС„РµСЂ РєРѕРЅСЃРѕР»Рё
 /// </summary>
 /// <param name="Frame"></param>
 /// <param name="Console"></param>
@@ -281,7 +336,7 @@ void CopyFrameToConsoleBuffer(Frame* Frame, ConsoleForm* Console)
 }
 
 /// <summary>
-/// Создает рамку вокруг фрейма(со всех сторон, если возможно) в буфере консоли
+/// РЎРѕР·РґР°РµС‚ СЂР°РјРєСѓ РІРѕРєСЂСѓРі С„СЂРµР№РјР°(СЃРѕ РІСЃРµС… СЃС‚РѕСЂРѕРЅ, РµСЃР»Рё РІРѕР·РјРѕР¶РЅРѕ) РІ Р±СѓС„РµСЂРµ РєРѕРЅСЃРѕР»Рё
 /// </summary>
 /// <param name="Frame"></param>
 /// <param name="Console"></param>
@@ -419,11 +474,11 @@ MoveState MoveSnakeBody(SnakeMap* Map, MapCOORD MoveDirection)
 		(Map->SnakeHead->Coords.Y + Map->Height + MoveDirection.Y) % Map->Height,
 	};
 
-	switch (Map->Cells[GetCellByCoordOnFrame((newCoord), (COORD) { .X = Map->Width, .Y = Map->Height })].CellType)
+	switch (Map->Cells[GetCellByCoordOnFrame((newCoord), (COORD) { .X = (SHORT)Map->Width, .Y = (SHORT)Map->Height })].CellType)
 	{
 	case FOOD:
 	{
-		// Если съели еду, то она становиться головой
+		// Р•СЃР»Рё СЃСЉРµР»Рё РµРґСѓ, С‚Рѕ РѕРЅР° СЃС‚Р°РЅРѕРІРёС‚СЊСЃСЏ РіРѕР»РѕРІРѕР№
 		Snake* BodyBlock = (Snake*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(Snake));
 		if (BodyBlock == NULL)
 		{
@@ -440,14 +495,14 @@ MoveState MoveSnakeBody(SnakeMap* Map, MapCOORD MoveDirection)
 	case SNAKE_BODY:
 	case WALL:
 	{
-		// Съели себя или стену
+		// РЎСЉРµР»Рё СЃРµР±СЏ РёР»Рё СЃС‚РµРЅСѓ
 		Result = BAD_EATEN;
 		break;
 	}
 	default:
 	{
-		// Просто движемся
-		Map->Cells[GetCellByCoordOnFrame((Map->SnakeTail->Coords), (COORD) { .X = Map->Width, .Y = Map->Height })].CellType = EMPTY;
+		// РџСЂРѕСЃС‚Рѕ РґРІРёР¶РµРјСЃСЏ
+		Map->Cells[GetCellByCoordOnFrame((Map->SnakeTail->Coords), (COORD) { .X = (SHORT)Map->Width, .Y = (SHORT)Map->Height })].CellType = EMPTY;
 
 		if (Map->SnakeTail != Map->SnakeHead) {
 			Map->SnakeHead->Prev = Map->SnakeTail;
@@ -461,7 +516,7 @@ MoveState MoveSnakeBody(SnakeMap* Map, MapCOORD MoveDirection)
 	}
 	}
 
-	Map->Cells[GetCellByCoordOnFrame((Map->SnakeHead->Coords), (COORD) { .X = Map->Width, .Y = Map->Height })].CellType = SNAKE_BODY;
+	Map->Cells[GetCellByCoordOnFrame((Map->SnakeHead->Coords), (COORD) { .X = (SHORT)Map->Width, .Y = (SHORT)Map->Height })].CellType = SNAKE_BODY;
 
 	return Result;
 }
@@ -473,12 +528,12 @@ int32_t GetCellByCoordOnFrame(MapCOORD Coords, COORD FrameSize)
 
 void SpawnFood(SnakeMap* Map)
 {
-	int СellNum = 0;
+	int РЎellNum = 0;
 	do {
-		СellNum = rand() % (Map->Width * Map->Height);
-	} while (Map->Cells[СellNum].CellType != EMPTY);
+		РЎellNum = rand() % (Map->Width * Map->Height);
+	} while (Map->Cells[РЎellNum].CellType != EMPTY);
 
-	Map->Cells[СellNum].CellType = FOOD;
+	Map->Cells[РЎellNum].CellType = FOOD;
 	Map->CurrentFoodCount++;
 }
 
@@ -551,13 +606,13 @@ ConsoleForm* NewConsoleForm(COORD Size, const char* LocaleName, const TCHAR* Tit
 
 	HANDLE OutputHandler = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (!OutputHandler) {
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return NULL;
 	}
 
 	ConsoleForm* Console = (ConsoleForm*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(ConsoleForm));
 	if (Console == NULL) {
-		_tprintf(TEXT("Ошибка выделения памяти под консоль\n"));
+		_tprintf(TEXT("РћС€РёР±РєР° РІС‹РґРµР»РµРЅРёСЏ РїР°РјСЏС‚Рё РїРѕРґ РєРѕРЅСЃРѕР»СЊ\n"));
 		return NULL;
 	}
 
@@ -582,16 +637,16 @@ ConsoleForm* NewConsoleForm(COORD Size, const char* LocaleName, const TCHAR* Tit
 BOOL SetConsoleSize(ConsoleForm* Console, COORD NewBufferSize)
 {
 	SMALL_RECT WindowInfo = { 0 };
-	// Зануление размера консоли
+	// Р—Р°РЅСѓР»РµРЅРёРµ СЂР°Р·РјРµСЂР° РєРѕРЅСЃРѕР»Рё
 	if (!SetConsoleWindowInfo(Console->OutputHandler, TRUE, &WindowInfo))
 	{
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return FALSE;
 	}
 
 	if (!SetConsoleScreenBufferSize(Console->OutputHandler, NewBufferSize))
 	{
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return FALSE;
 	}
 
@@ -599,14 +654,14 @@ BOOL SetConsoleSize(ConsoleForm* Console, COORD NewBufferSize)
 	WindowInfo.Bottom = NewBufferSize.Y - 1;
 	if (!SetConsoleWindowInfo(Console->OutputHandler, TRUE, &WindowInfo))
 	{
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return FALSE;
 	}
 
 	PCHAR_INFO newBuffer = (PCHAR_INFO)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(CHAR_INFO) * NewBufferSize.X * NewBufferSize.Y);
 	if (!newBuffer)
 	{
-		_tprintf(TEXT("Ошибка выделения памяти под буффер %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° РІС‹РґРµР»РµРЅРёСЏ РїР°РјСЏС‚Рё РїРѕРґ Р±СѓС„С„РµСЂ %d\n"), GetLastError());
 		return FALSE;
 	}
 
@@ -620,7 +675,7 @@ BOOL SetConsoleTitleAndCursor(ConsoleForm* Console, TCHAR const* Title)
 {
 	if (!SetConsoleTitle(Title))
 	{
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return FALSE;
 	}
 
@@ -628,7 +683,7 @@ BOOL SetConsoleTitleAndCursor(ConsoleForm* Console, TCHAR const* Title)
 
 	if (!SetConsoleCursorInfo(Console->OutputHandler, &ci))
 	{
-		_tprintf(TEXT("Ошибка %d\n"), GetLastError());
+		_tprintf(TEXT("РћС€РёР±РєР° %d\n"), GetLastError());
 		return FALSE;
 	}
 
